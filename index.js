@@ -22,6 +22,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/households', require('./routes/households'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/tourism', require('./routes/tourism'));
 
 // Start server
 app.listen(PORT, () => {
