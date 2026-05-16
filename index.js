@@ -22,6 +22,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/households', require('./routes/households'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/locations', require('./routes/locations'));
+app.use('/api/tourism-categories', require('./routes/tourismCategories'));
 app.use('/api/tourism', require('./routes/tourism'));
 
 // Start server
