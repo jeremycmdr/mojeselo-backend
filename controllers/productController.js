@@ -1,59 +1,82 @@
 const db = require('../config/db');
 
+const getPagination = (query) => {
+  const limit = Number.parseInt(query.limit, 10);
+  const offset = Number.parseInt(query.offset, 10);
+
+  return {
+    limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : null,
+    offset: Number.isInteger(offset) && offset >= 0 ? offset : 0
+  };
+};
+
 // @desc    Preuzmi sve proizvode iz baze
 // @route   GET /api/products
 // @access  Public
 exports.getProducts = async (req, res) => {
   try {
-    // JOIN sa tabelom kategorija. Ako join ne uspe (nema id-a), category_name će biti ono što je u p.category
+    const { limit, offset } = getPagination(req.query);
+    const paginationSql = limit ? ` LIMIT ${limit} OFFSET ${offset}` : '';
+
     const sql = `
-      SELECT p.*, IFNULL(c.name, p.category) as category_name 
-      FROM products p 
+      SELECT p.*, IFNULL(c.name, p.category) as category_name
+      FROM products p
       LEFT JOIN categories c ON p.category = c.id
-      ORDER BY p.id DESC
+      ORDER BY p.created_at DESC, p.id DESC
+      ${paginationSql}
     `;
     const [rows] = await db.query(sql);
+
+    let total = rows.length;
+    if (limit) {
+      const [countRows] = await db.query('SELECT COUNT(*) as total FROM products');
+      total = countRows[0].total;
+    }
 
     res.status(200).json({
       success: true,
       count: rows.length,
+      total,
+      limit,
+      offset,
+      hasMore: limit ? offset + rows.length < total : false,
       data: rows
     });
   } catch (error) {
-    console.error('❌ Greška pri čitanju iz baze:', error.message);
+    console.error('Greska pri citanju iz baze:', error.message);
     res.status(500).json({
       success: false,
-      message: "Greška na serveru prilikom preuzimanja proizvoda.",
+      message: 'Greska na serveru prilikom preuzimanja proizvoda.',
       error: error.message
     });
   }
 };
 
-// @desc    Preuzmi proizvode specifičnog korisnika
+// @desc    Preuzmi proizvode specificnog korisnika
 // @route   GET /api/products/user/:userId
 // @access  Public
 exports.getProductsByUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const sql = `
-      SELECT p.*, IFNULL(c.name, p.category) as category_name 
-      FROM products p 
-      LEFT JOIN categories c ON p.category = c.id 
+      SELECT p.*, IFNULL(c.name, p.category) as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category = c.id
       WHERE p.user_id = ?
-      ORDER BY p.id DESC
+      ORDER BY p.created_at DESC, p.id DESC
     `;
     const [rows] = await db.query(sql, [userId]);
-    
+
     res.status(200).json({
       success: true,
       count: rows.length,
       data: rows
     });
   } catch (error) {
-    console.error('❌ Greška pri preuzimanju korisničkih proizvoda:', error.message);
+    console.error('Greska pri preuzimanju korisnickih proizvoda:', error.message);
     res.status(500).json({
       success: false,
-      message: "Greška na serveru.",
+      message: 'Greska na serveru.',
       error: error.message
     });
   }
@@ -73,20 +96,20 @@ exports.createProduct = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Proizvod uspešno dodat!',
+      message: 'Proizvod uspesno dodat!',
       productId: result.insertId
     });
   } catch (error) {
-    console.error('❌ Greška pri kreiranju proizvoda:', error.message);
+    console.error('Greska pri kreiranju proizvoda:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Greška na serveru pri čuvanju proizvoda.',
+      message: 'Greska na serveru pri cuvanju proizvoda.',
       error: error.message
     });
   }
 };
 
-// @desc    Ažuriraj proizvod
+// @desc    Azuriraj proizvod
 // @route   PUT /api/products/:id
 // @access  Private
 exports.updateProduct = async (req, res) => {
@@ -99,14 +122,14 @@ exports.updateProduct = async (req, res) => {
       [name, price, category, image, description, isOrganic ? 1 : 0, id]
     );
 
-    res.status(200).json({ success: true, message: 'Proizvod uspešno ažuriran!' });
+    res.status(200).json({ success: true, message: 'Proizvod uspesno azuriran!' });
   } catch (error) {
-    console.error('❌ Greška pri ažuriranju:', error.message);
-    res.status(500).json({ success: false, message: 'Greška na serveru.' });
+    console.error('Greska pri azuriranju:', error.message);
+    res.status(500).json({ success: false, message: 'Greska na serveru.' });
   }
 };
 
-// @desc    Obriši proizvod
+// @desc    Obrisi proizvod
 // @route   DELETE /api/products/:id
 // @access  Private
 exports.deleteProduct = async (req, res) => {
@@ -114,9 +137,9 @@ exports.deleteProduct = async (req, res) => {
 
   try {
     await db.query('DELETE FROM products WHERE id = ?', [id]);
-    res.status(200).json({ success: true, message: 'Proizvod uspešno obrisan!' });
+    res.status(200).json({ success: true, message: 'Proizvod uspesno obrisan!' });
   } catch (error) {
-    console.error('❌ Greška pri brisanju:', error.message);
-    res.status(500).json({ success: false, message: 'Greška na serveru.' });
+    console.error('Greska pri brisanju:', error.message);
+    res.status(500).json({ success: false, message: 'Greska na serveru.' });
   }
 };

@@ -1,20 +1,49 @@
 const db = require('../config/db');
 
+const getPagination = (query) => {
+    const limit = Number.parseInt(query.limit, 10);
+    const offset = Number.parseInt(query.offset, 10);
+
+    return {
+        limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : null,
+        offset: Number.isInteger(offset) && offset >= 0 ? offset : 0
+    };
+};
+
 // @desc    Get all rural tourism items
 exports.getTourism = async (req, res) => {
     try {
+        const { limit, offset } = getPagination(req.query);
+        const paginationSql = limit ? ` LIMIT ${limit} OFFSET ${offset}` : '';
+
         const [rows] = await db.execute(`
             SELECT rt.*, u.name as household_name, tc.name as category, l.name as location_name
             FROM rural_tourism rt
             JOIN users u ON rt.household_id = u.id
             LEFT JOIN tourism_categories tc ON rt.category_id = tc.id
             LEFT JOIN locations l ON rt.location_id = l.id
-            ORDER BY rt.created_at DESC
+            ORDER BY rt.created_at DESC, rt.id DESC
+            ${paginationSql}
         `);
-        res.status(200).json({ success: true, data: rows });
+
+        let total = rows.length;
+        if (limit) {
+            const [countRows] = await db.execute('SELECT COUNT(*) as total FROM rural_tourism');
+            total = countRows[0].total;
+        }
+
+        res.status(200).json({
+            success: true,
+            count: rows.length,
+            total,
+            limit,
+            offset,
+            hasMore: limit ? offset + rows.length < total : false,
+            data: rows
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: 'Greška pri preuzimanju podataka.' });
+        res.status(500).json({ success: false, message: 'Greska pri preuzimanju podataka.' });
     }
 };
 
@@ -27,10 +56,11 @@ exports.getTourismByUser = async (req, res) => {
             LEFT JOIN tourism_categories tc ON rt.category_id = tc.id
             LEFT JOIN locations l ON rt.location_id = l.id
             WHERE rt.household_id = ?
+            ORDER BY rt.created_at DESC, rt.id DESC
         `, [req.params.userId]);
         res.status(200).json({ success: true, data: rows });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Greška pri preuzimanju.' });
+        res.status(500).json({ success: false, message: 'Greska pri preuzimanju.' });
     }
 };
 
@@ -43,10 +73,10 @@ exports.createTourism = async (req, res) => {
             'INSERT INTO rural_tourism (title, description, image, price, location_id, household_id, category_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [title, description, image, price, location_id, household_id, category_id]
         );
-        res.status(201).json({ success: true, message: 'Oglas za turizam uspješno dodat.', id: result.insertId });
+        res.status(201).json({ success: true, message: 'Oglas za turizam uspjesno dodat.', id: result.insertId });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: 'Greška pri čuvanju.' });
+        res.status(500).json({ success: false, message: 'Greska pri cuvanju.' });
     }
 };
 
@@ -58,9 +88,9 @@ exports.updateTourism = async (req, res) => {
             'UPDATE rural_tourism SET title = ?, description = ?, image = ?, price = ?, location_id = ?, category_id = ? WHERE id = ?',
             [title, description, image, price, location_id, category_id, req.params.id]
         );
-        res.status(200).json({ success: true, message: 'Uspešno izmijenjeno.' });
+        res.status(200).json({ success: true, message: 'Uspesno izmijenjeno.' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Greška pri izmjeni.' });
+        res.status(500).json({ success: false, message: 'Greska pri izmjeni.' });
     }
 };
 
@@ -72,6 +102,6 @@ exports.deleteTourism = async (req, res) => {
         await db.execute('DELETE FROM rural_tourism WHERE id = ?', [req.params.id]);
         res.status(200).json({ success: true, message: 'Obrisano.' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Greška pri brisanju.' });
+        res.status(500).json({ success: false, message: 'Greska pri brisanju.' });
     }
 };
