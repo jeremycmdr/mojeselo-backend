@@ -25,6 +25,7 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/locations', require('./routes/locations'));
 app.use('/api/tourism-categories', require('./routes/tourismCategories'));
 app.use('/api/tourism', require('./routes/tourism'));
+app.use('/api/chat', require('./routes/chat'));
 
 // Start server
 app.listen(PORT, () => {
