@@ -58,6 +58,9 @@ exports.getConversations = async (req, res) => {
 exports.getMessages = async (req, res) => {
   const myId = req.user.id;
   const conversationId = req.params.id;
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 100);
+  const beforeId = parseInt(req.query.before, 10);
+  const hasBeforeId = Number.isInteger(beforeId) && beforeId > 0;
 
   try {
     // 1. Proveri da li konverzacija pripada korisniku
@@ -76,15 +79,35 @@ exports.getMessages = async (req, res) => {
       [conversationId, myId]
     );
 
-    // 3. Preuzmi sve poruke
-    const [messages] = await db.query(
-      'SELECT id, conversation_id, sender_id, message_text, is_read, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
-      [conversationId]
-    );
+    // 3. Preuzmi poruke u stranicama: zadnjih 25, pa starije od najstarije ucitane poruke
+    const params = hasBeforeId
+      ? [conversationId, beforeId, limit + 1]
+      : [conversationId, limit + 1];
+
+    const query = hasBeforeId
+      ? `SELECT id, conversation_id, sender_id, message_text, is_read, created_at
+         FROM messages
+         WHERE conversation_id = ? AND id < ?
+         ORDER BY id DESC
+         LIMIT ?`
+      : `SELECT id, conversation_id, sender_id, message_text, is_read, created_at
+         FROM messages
+         WHERE conversation_id = ?
+         ORDER BY id DESC
+         LIMIT ?`;
+
+    const [rows] = await db.query(query, params);
+    const hasMore = rows.length > limit;
+    const messages = rows.slice(0, limit).reverse();
 
     res.status(200).json({
       success: true,
-      data: messages
+      data: messages,
+      pagination: {
+        limit,
+        hasMore,
+        before: messages[0]?.id || null
+      }
     });
   } catch (error) {
     console.error('❌ Greška pri preuzimanju poruka:', error.message);
