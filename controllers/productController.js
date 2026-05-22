@@ -86,12 +86,13 @@ exports.getProductsByUser = async (req, res) => {
 // @route   POST /api/products
 // @access  Private (Ulogovani korisnici)
 exports.createProduct = async (req, res) => {
-  const { name, price, category, image, description, isOrganic, user_id } = req.body;
+  const { name, price, category, image, description, isOrganic } = req.body;
+  const userId = req.user.id;
 
   try {
     const [result] = await db.query(
       'INSERT INTO products (name, price, category, image, description, isOrganic, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, price, category, image, description, isOrganic ? 1 : 0, user_id]
+      [name, price, category, image, description, isOrganic ? 1 : 0, userId]
     );
 
     res.status(201).json({
@@ -115,11 +116,24 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   const { id } = req.params;
   const { name, price, category, image, description, isOrganic } = req.body;
+  const userId = req.user.id;
 
   try {
+    const [existingProducts] = await db.query(
+      'SELECT id FROM products WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+
+    if (existingProducts.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proizvod nije pronadjen ili nemate dozvolu za izmjenu.'
+      });
+    }
+
     await db.query(
-      'UPDATE products SET name = ?, price = ?, category = ?, image = ?, description = ?, isOrganic = ? WHERE id = ?',
-      [name, price, category, image, description, isOrganic ? 1 : 0, id]
+      'UPDATE products SET name = ?, price = ?, category = ?, image = ?, description = ?, isOrganic = ? WHERE id = ? AND user_id = ?',
+      [name, price, category, image, description, isOrganic ? 1 : 0, id, userId]
     );
 
     res.status(200).json({ success: true, message: 'Proizvod uspesno azuriran!' });
@@ -134,9 +148,22 @@ exports.updateProduct = async (req, res) => {
 // @access  Private
 exports.deleteProduct = async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
 
   try {
-    await db.query('DELETE FROM products WHERE id = ?', [id]);
+    const [existingProducts] = await db.query(
+      'SELECT id FROM products WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+
+    if (existingProducts.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proizvod nije pronadjen ili nemate dozvolu za brisanje.'
+      });
+    }
+
+    await db.query('DELETE FROM products WHERE id = ? AND user_id = ?', [id, userId]);
     res.status(200).json({ success: true, message: 'Proizvod uspesno obrisan!' });
   } catch (error) {
     console.error('Greska pri brisanju:', error.message);

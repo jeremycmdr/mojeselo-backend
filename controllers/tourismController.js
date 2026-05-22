@@ -66,12 +66,13 @@ exports.getTourismByUser = async (req, res) => {
 
 // @desc    Create rural tourism item
 exports.createTourism = async (req, res) => {
-    const { title, description, image, price, location_id, household_id, category_id } = req.body;
+    const { title, description, image, price, location_id, category_id } = req.body;
+    const householdId = req.user.id;
 
     try {
         const [result] = await db.execute(
             'INSERT INTO rural_tourism (title, description, image, price, location_id, household_id, category_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [title, description, image, price, location_id, household_id, category_id]
+            [title, description, image, price, location_id, householdId, category_id]
         );
         res.status(201).json({ success: true, message: 'Oglas za turizam uspjesno dodat.', id: result.insertId });
     } catch (error) {
@@ -83,10 +84,23 @@ exports.createTourism = async (req, res) => {
 // @desc    Update tourism item
 exports.updateTourism = async (req, res) => {
     const { title, description, image, price, location_id, category_id } = req.body;
+    const householdId = req.user.id;
     try {
+        const [existingItems] = await db.execute(
+            'SELECT id FROM rural_tourism WHERE id = ? AND household_id = ?',
+            [req.params.id, householdId]
+        );
+
+        if (existingItems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Oglas nije pronadjen ili nemate dozvolu za izmjenu.'
+            });
+        }
+
         await db.execute(
-            'UPDATE rural_tourism SET title = ?, description = ?, image = ?, price = ?, location_id = ?, category_id = ? WHERE id = ?',
-            [title, description, image, price, location_id, category_id, req.params.id]
+            'UPDATE rural_tourism SET title = ?, description = ?, image = ?, price = ?, location_id = ?, category_id = ? WHERE id = ? AND household_id = ?',
+            [title, description, image, price, location_id, category_id, req.params.id, householdId]
         );
         res.status(200).json({ success: true, message: 'Uspesno izmijenjeno.' });
     } catch (error) {
@@ -98,8 +112,21 @@ exports.updateTourism = async (req, res) => {
 // @route   DELETE /api/tourism/:id
 // @access  Private
 exports.deleteTourism = async (req, res) => {
+    const householdId = req.user.id;
     try {
-        await db.execute('DELETE FROM rural_tourism WHERE id = ?', [req.params.id]);
+        const [existingItems] = await db.execute(
+            'SELECT id FROM rural_tourism WHERE id = ? AND household_id = ?',
+            [req.params.id, householdId]
+        );
+
+        if (existingItems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Oglas nije pronadjen ili nemate dozvolu za brisanje.'
+            });
+        }
+
+        await db.execute('DELETE FROM rural_tourism WHERE id = ? AND household_id = ?', [req.params.id, householdId]);
         res.status(200).json({ success: true, message: 'Obrisano.' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Greska pri brisanju.' });
